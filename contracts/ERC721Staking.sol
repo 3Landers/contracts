@@ -80,6 +80,8 @@ contract ERC721Staking is
   mapping(uint256 => address) private _owner;
   //mapping of nft token id to starting stake time
   mapping(uint256 => uint256) private _start;
+  //mapping of nft token id to last released time
+  mapping(uint256 => uint256) private _released;
   //mapping of nft token id to longest time stake
   mapping(uint256 => uint256) private _longest;
   //tokens earned per second
@@ -150,14 +152,22 @@ contract ERC721Staking is
   }
 
   /**
+   * @dev Returns the last time tokens were released on `tokenId`
+   */
+  function released(uint256 tokenId) external view returns(uint256) {
+    return _start[tokenId];
+  }
+
+  /**
    * @dev Calculate how many tokens an NFT earned
    */
-  function releaseable(
-    uint256 tokenId, 
-    uint256 timestamp
-  ) public view returns(uint256) {
+  function releaseable(uint256 tokenId) external view returns(uint256) {
+    //if not staking
+    if (_released[tokenId] == 0) {
+      return 0;
+    }
     //duration x rate
-    return _releaseable(_duration(tokenId, timestamp));
+    return _releaseable(_duration(tokenId, block.timestamp));
   }
 
   /**
@@ -264,7 +274,7 @@ contract ERC721Staking is
     uint256 tokenId, 
     uint256 timestamp
   ) internal view returns(uint256) {
-    return timestamp - _start[tokenId];
+    return timestamp - _released[tokenId];
   }
 
   /**
@@ -277,10 +287,12 @@ contract ERC721Staking is
       //get tokenId
       uint256 tokenId = tokenIds[i];
       //revert if not staking or not owner
-      if (_start[tokenId] == 0 || staker != ownerOf(tokenId)) 
+      if (_released[tokenId] == 0 || staker != ownerOf(tokenId)) 
         revert InvalidCall();
       //add to release
       toRelease += _releaseable(_duration(tokenId, block.timestamp));
+      //update the last released time
+      _released[tokenId] = block.timestamp;
     }
     //mint tokens
     address(TOKEN).functionCall(
@@ -314,13 +326,15 @@ contract ERC721Staking is
       //revert if already staking
       //we dont need to check `ownerOf` because 
       //`transferFrom` will fail if not owner
-      if (_start[tokenId] != 0) revert InvalidCall();
+      if (_released[tokenId] != 0) revert InvalidCall();
       // reverts if contract not approved to move nft tokens
       NFT.transferFrom(staker, address(this), tokenId);
       //map token to staker
       _owner[tokenId] = staker;
       //set start time
       _start[tokenId] = block.timestamp;
+      //set the last released time
+      _released[tokenId] = block.timestamp;
       //mock emit mint transfer
       emit Transfer(address(0), staker, tokenId);
     }
@@ -339,7 +353,7 @@ contract ERC721Staking is
       //get token id
       uint256 tokenId = tokenIds[i];
       //revert if not staking or not owner
-      if (_start[tokenId] == 0 || staker != ownerOf(tokenId)) 
+      if (_released[tokenId] == 0 || staker != ownerOf(tokenId)) 
         revert InvalidCall();
 
       //transfer nft to owner
@@ -349,8 +363,9 @@ contract ERC721Staking is
 
       //get duration
       uint256 duration = _duration(tokenId, block.timestamp);
-      //reset the clock
-      _start[tokenId] = block.timestamp;
+      //reset the clocks
+      _start[tokenId] = 0;
+      _released[tokenId] = 0;
       //update total
       if (duration > _longest[tokenId]) {
         _longest[tokenId] = duration;

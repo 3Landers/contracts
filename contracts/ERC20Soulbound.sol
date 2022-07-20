@@ -29,7 +29,7 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
    * @dev Sets the name and symbol. Grants `DEFAULT_ADMIN_ROLE`
    * to the admin
    */
-  constructor(address admin) ERC20("3L TIME", "DAY") {
+  constructor(address admin) ERC20("Lander Points", "3LP") {
     //set up roles for contract creator
     _setupRole(DEFAULT_ADMIN_ROLE, admin);
     _setupRole(_PAUSER_ROLE, admin);
@@ -43,6 +43,8 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
   function burn(uint256 amount) external {
     _burn(_msgSender(), amount);
   }
+
+  // ============ Admin Methods ============
 
   /**
    * @dev Destroys `amount` tokens from `account`, deducting from 
@@ -88,6 +90,8 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
   function unpause() public virtual onlyRole(_PAUSER_ROLE) {
     _unpause();
   }
+
+  // ============ Internal Methods ============
 
   /**
    * @dev Checks if paused or soulbound before token transfer
