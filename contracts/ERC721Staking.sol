@@ -45,6 +45,7 @@ interface IERC721ReadOnly {
  */
 contract ERC721Staking is 
   Context, 
+  AccessControl,
   IERC721ReadOnly, 
   IERC721Receiver 
 {
@@ -62,31 +63,39 @@ contract ERC721Staking is
 
   // ============ Constants ============
 
-  //tokens earned per second
-  uint256 public constant TOKEN_RATE = 0.0001 ether;
+  //admin roles
+  bytes32 private constant _STAKER_ROLE = keccak256("STAKER_ROLE");
+  bytes32 private constant _CURATOR_ROLE = keccak256("CURATOR_ROLE");
+  
   //this is the contract address for erc721
   IERC721Enumerable public immutable NFT;
   //this is the contract address for erc20
   IERC20Mintable public immutable TOKEN;
 
   // ============ Storage ============
-
-  //mapping of owner to buffered
-  mapping(address => uint256) private _buffered;
-  //mapping of owner to starting stake time
-  mapping(address => uint256) private _start;
-  //mapping of owner to tokens
-  mapping(address => uint256[]) private _staked;
-  //mapping of token to index
-  mapping(uint256 => uint256) private _index;
-  //mapping of token to owner
+  
+  //mapping of owner to balance
+  mapping(address => uint256) private _balances;
+  //mapping of nft token id to owner
   mapping(uint256 => address) private _owner;
+  //mapping of nft token id to starting stake time
+  mapping(uint256 => uint256) private _start;
+  //mapping of nft token id to longest time stake
+  mapping(uint256 => uint256) private _longest;
+  //tokens earned per second
+  uint256 private _tokenRate = 0.0001 ether;
 
   // ============ Deploy ============
 
-  constructor(IERC721Enumerable nft, IERC20Mintable token) {
+  constructor(
+    IERC721Enumerable nft, 
+    IERC20Mintable token, 
+    address admin
+  ) {
     NFT = nft;
     TOKEN = token;
+
+    _setupRole(DEFAULT_ADMIN_ROLE, admin);
   }
 
   // ============ Read Methods ============
@@ -100,9 +109,7 @@ contract ERC721Staking is
     address owner
   ) external view returns(uint256[] memory) {
     uint256 supply = NFT.totalSupply();
-    uint256[] memory tokens = new uint256[](
-      NFT.balanceOf(owner)
-    );
+    uint256[] memory tokens = new uint256[](NFT.balanceOf(owner));
     uint256 index;
     for (uint256 i = 1; i <= supply; i++) {
       if (NFT.ownerOf(i) == owner) {
@@ -117,8 +124,8 @@ contract ERC721Staking is
    */
   function balanceOf(
     address owner
-  ) external view returns(uint256 balance) {
-    return _staked[owner].length;
+  ) public view returns(uint256 balance) {
+    return _balances[owner];
   }
 
   /**
@@ -138,7 +145,7 @@ contract ERC721Staking is
    */
   function ownerOf(
     uint256 tokenId
-  ) external view returns(address owner) {
+  ) public view returns(address owner) {
     return _owner[tokenId];
   }
 
@@ -146,24 +153,44 @@ contract ERC721Staking is
    * @dev Calculate how many tokens an NFT earned
    */
   function releaseable(
-    address staker, 
+    uint256 tokenId, 
     uint256 timestamp
   ) public view returns(uint256) {
-    //duration x # staking x rate + buffered
-    return (
-      (timestamp - _start[staker]) 
-      * _staked[staker].length 
-      * TOKEN_RATE
-    ) + _buffered[staker];
+    //duration x rate
+    return _releaseable(_duration(tokenId, timestamp));
   }
 
   /**
-   * @dev Returns all the tokens the `staker` has staked
+   * @dev Returns all the tokens of the `staker` that is currently 
+   * staking. It is incredibly inefficient for use by a contract 
+   * write function.
    */
   function staked(
     address staker
   ) external view returns(uint256[] memory) {
-    return _staked[staker];
+    uint256 supply = NFT.totalSupply();
+    uint256[] memory tokens = new uint256[](balanceOf(staker));
+    uint256 index;
+    for (uint256 i = 1; i <= supply; i++) {
+      if (ownerOf(i) == staker) {
+        tokens[index++] = i;
+      }
+    }
+    return tokens;
+  }
+
+  /**
+   * @dev Returns the date which the token started staking. 
+   */
+  function stakedSince(uint256 tokenId) external view returns(uint256) {
+    return _start[tokenId];
+  }
+
+  /**
+   * @dev Returns the date which the token started staking. 
+   */
+  function stakedLongest(uint256 tokenId) external view returns(uint256) {
+    return _longest[tokenId];
   }
 
   // ============ Write Methods ============
@@ -171,90 +198,177 @@ contract ERC721Staking is
   /**
    * @dev Releases tokens without unstaking
    */
-  function release() public {
-    //get the staker
-    address staker = _msgSender();
-    uint256 toRelease = releaseable(staker, block.timestamp);
-    //mint tokens
-    address(TOKEN).functionCall(
-      abi.encodeWithSelector(TOKEN.mint.selector, staker, toRelease), 
-      "Low-level mint failed"
-    );
-    //reset vault
-    _buffered[staker] = 0;
-    //reset the clock
-    _start[staker] = block.timestamp;
-    //emit released
-    emit Release(staker, toRelease);
+  function release(uint256[] memory tokenIds) external {
+    _release(_msgSender(), tokenIds);
   }
 
   /**
    * @dev Stakes NFTs
    */
   function stake(uint256[] memory tokenIds) external {
-    //get the staker
-    address staker = _msgSender();
-    //vault the current releaseable
-    _buffered[staker] = releaseable(staker, block.timestamp);
-    //reset the clock
-    _start[staker] = block.timestamp;
+    _stake(_msgSender(), tokenIds);
+  }
+
+  /**
+   * @dev Unstakes NFTs
+   */
+  function unstake(uint256[] memory tokenIds) external {
+    _unstake(_msgSender(), tokenIds);
+  }
+
+  // ============ Admin Methods ============
+
+  /**
+   * @dev Releases tokens without unstaking
+   */
+  function release(
+    address staker, 
+    uint256[] memory tokenIds
+  ) external onlyRole(_STAKER_ROLE) {
+    _release(staker, tokenIds);
+  }
+
+  /**
+   * @dev Stakes NFTs
+   */
+  function stake(
+    address staker, 
+    uint256[] memory tokenIds
+  ) external onlyRole(_STAKER_ROLE) {
+    _stake(staker, tokenIds);
+  }
+
+  /**
+   * @dev Unstakes NFTs
+   */
+  function unstake(
+    address staker, 
+    uint256[] memory tokenIds
+  ) external onlyRole(_STAKER_ROLE) {
+    _unstake(staker, tokenIds);
+  }
+
+  /**
+   * @dev Updates staking rate
+   */
+  function updateRate(uint256 rate) external onlyRole(_CURATOR_ROLE) {
+    _tokenRate = rate;
+  }
+
+  // ============ Internal Methods ============
+
+  /**
+   * @dev returns the duration given the `staker` and `timestamp`
+   */
+  function _duration(
+    uint256 tokenId, 
+    uint256 timestamp
+  ) internal view returns(uint256) {
+    return timestamp - _start[tokenId];
+  }
+
+  /**
+   * @dev Releases tokens staked by many nfts
+   */
+  function _release(address staker, uint256[] memory tokenIds) internal {
+    //init to release. we will add amounts in loop
+    uint256 toRelease;
+    for (uint256 i = 0; i < tokenIds.length; i++) {
+      //get tokenId
+      uint256 tokenId = tokenIds[i];
+      //revert if not staking or not owner
+      if (_start[tokenId] == 0 || staker != ownerOf(tokenId)) 
+        revert InvalidCall();
+      //add to release
+      toRelease += _releaseable(_duration(tokenId, block.timestamp));
+    }
+    //mint tokens
+    address(TOKEN).functionCall(
+      abi.encodeWithSelector(TOKEN.mint.selector, staker, toRelease), 
+      "Low-level mint failed"
+    );
+    //emit released
+    emit Release(staker, toRelease);
+  }
+  
+  /**
+   * @dev Converts time to tokens given `duration`
+   */
+  function _releaseable(
+    uint256 duration
+  ) internal view returns(uint256) {
+    //duration x rate
+    return duration * _tokenRate;
+  }
+
+  /**
+   * @dev Stakes NFTs
+   */
+  function _stake(address staker, uint256[] memory tokenIds) internal {
+    //add balance
+    _balances[staker] += tokenIds.length;
     //loop through each token id
     for (uint256 i = 0; i < tokenIds.length; i++) {
+      //get token id
       uint256 tokenId = tokenIds[i];
-      //reverts if not owner. this prevents random people
-      //transferring nfts when this contract is approved to do so
-      if (NFT.ownerOf(tokenId) != staker) revert InvalidCall();
+      //revert if already staking
+      //we dont need to check `ownerOf` because 
+      //`transferFrom` will fail if not owner
+      if (_start[tokenId] != 0) revert InvalidCall();
       // reverts if contract not approved to move nft tokens
       NFT.transferFrom(staker, address(this), tokenId);
-      //index and add token id (index zero is reserved for not exists)
-      _index[tokenId] = _staked[staker].length + 1;
-      _staked[staker].push(tokenId);
+      //map token to staker
+      _owner[tokenId] = staker;
+      //set start time
+      _start[tokenId] = block.timestamp;
       //mock emit mint transfer
       emit Transfer(address(0), staker, tokenId);
     }
   }
 
   /**
-   * @dev Unstakes NFTs
+   * @dev Release and unstakes NFTs
    */
-  function unstake(uint256[] memory tokenIds, bool andRelease) external {
-    //get the staker
-    address staker = _msgSender();
-    if (andRelease) {
-      release();
-    } else {
-      //vault the current releaseable
-      _buffered[staker] = releaseable(staker, block.timestamp);
-      //reset the clock
-      _start[staker] = block.timestamp;
-    }
-    
+  function _unstake(address staker, uint256[] memory tokenIds) internal {
+    //less balance
+    _balances[staker] -= tokenIds.length;
+    //init to release. we will add amounts in loop
+    uint256 toRelease;
     //loop through each token id
     for (uint256 i = 0; i < tokenIds.length; i++) {
       //get token id
       uint256 tokenId = tokenIds[i];
-      //get index
-      uint256 index = _index[tokenId];
-      //only the owner can unstake their nft
-      if (index == 0) revert InvalidCall();
-      //transfer from contract to owner
+      //revert if not staking or not owner
+      if (_start[tokenId] == 0 || staker != ownerOf(tokenId)) 
+        revert InvalidCall();
+
+      //transfer nft to owner
       NFT.transferFrom(address(this), staker, tokenId);
-      //get last token id
-      uint256 lastTokenId = _staked[staker][
-        _staked[staker].length - 1
-      ];
-      //replace the token id we will be removing with
-      //the last token id in the array
-      _staked[staker][index - 1] = lastTokenId;
-      //pop out the last token id in the array
-      _staked[staker].pop();
-      //remove the token id from the index
-      _index[tokenId] = 0;
-      //update the last token id with the index of
-      //the now unstaked token id
-      _index[lastTokenId] = index;
+      //unmap token from staker
+      _owner[tokenId] = address(0);
+
+      //get duration
+      uint256 duration = _duration(tokenId, block.timestamp);
+      //reset the clock
+      _start[tokenId] = block.timestamp;
+      //update total
+      if (duration > _longest[tokenId]) {
+        _longest[tokenId] = duration;
+      }
+
       //mock emit burn transfer
       emit Transfer(staker, address(0), tokenId);
+
+      //add to release
+      toRelease += _releaseable(duration);
     }
+
+    //mint tokens
+    address(TOKEN).functionCall(
+      abi.encodeWithSelector(TOKEN.mint.selector, staker, toRelease), 
+      "Low-level mint failed"
+    );
+    //emit released
+    emit Release(staker, toRelease);
   }
 }

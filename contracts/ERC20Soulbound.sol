@@ -19,9 +19,9 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
   // ============ Constants ============
 
   //all custom roles
-  bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-  bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-  bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+  bytes32 private constant _MINTER_ROLE = keccak256("MINTER_ROLE");
+  bytes32 private constant _PAUSER_ROLE = keccak256("PAUSER_ROLE");
+  bytes32 private constant _BURNER_ROLE = keccak256("BURNER_ROLE");
 
   // ============ Deploy ============
 
@@ -32,7 +32,7 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
   constructor(address admin) ERC20("3L TIME", "DAY") {
     //set up roles for contract creator
     _setupRole(DEFAULT_ADMIN_ROLE, admin);
-    _setupRole(PAUSER_ROLE, admin);
+    _setupRole(_PAUSER_ROLE, admin);
   }
 
   // ============ Write Methods ============
@@ -51,7 +51,7 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
   function burn(address account, uint256 amount) external {
     address operator = _msgSender();
     //if operator is not allowed to burn
-    if (!hasRole(BURNER_ROLE, operator)) {
+    if (!hasRole(_BURNER_ROLE, operator)) {
       //get the operator's current allowance
       uint256 currentAllowance = allowance(account, operator);
       //if not enough allowance
@@ -71,21 +71,21 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
   function mint(
     address to, 
     uint256 amount
-  ) external whenNotPaused onlyRole(MINTER_ROLE) {
+  ) external whenNotPaused onlyRole(_MINTER_ROLE) {
     _mint(to, amount);
   }
 
   /**
    * @dev Pauses all token transfers.
    */
-  function pause() public virtual onlyRole(PAUSER_ROLE) {
+  function pause() public virtual onlyRole(_PAUSER_ROLE) {
     _pause();
   }
 
   /**
    * @dev Unpauses all token transfers.
    */
-  function unpause() public virtual onlyRole(PAUSER_ROLE) {
+  function unpause() public virtual onlyRole(_PAUSER_ROLE) {
     _unpause();
   }
 
