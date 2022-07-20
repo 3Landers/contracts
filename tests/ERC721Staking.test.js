@@ -40,7 +40,7 @@ describe('ERC721Staking Tests', function () {
     const token = await deploy('ERC20Soulbound', signers[0].address)
     await bindContract('withToken', 'ERC20Soulbound', token, signers)
 
-    const nft = await deploy('ERC721Mock', '3Landers', '3L')
+    const nft = await deploy('ERC721Mock')
     await bindContract('withNFT', 'ERC721Mock', nft, signers)
 
     const staking = await deploy('ERC721Staking', nft.address, token.address, signers[0].address)
