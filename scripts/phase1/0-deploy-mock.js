@@ -1,5 +1,5 @@
 //to run this on testnet:
-// $ npx hardhat run scripts/phase1/2-deploy-mock.js
+// $ npx hardhat run scripts/phase1/0-deploy-mock.js
 
 const hardhat = require('hardhat')
 
@@ -13,8 +13,6 @@ async function deploy(name, ...params) {
 }
 
 async function main() {
-  await hre.run('compile')
-
   console.log('Deploying ERC721Mock ...')
   const nft = await deploy('ERC721Mock')
 

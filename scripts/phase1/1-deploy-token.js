@@ -24,7 +24,6 @@ function getRole(name) {
 }
 
 async function main() {
-  await hre.run('compile')
   //get network and admin
   const network = hardhat.config.networks[hardhat.config.defaultNetwork]
   const admin = new ethers.Wallet(network.accounts[0])

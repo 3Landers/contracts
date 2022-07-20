@@ -37,7 +37,12 @@ module.exports = {
       scanner: 'https://rinkeby.etherscan.io',
       opensea: 'https://testnets.opensea.io',
       accounts: [process.env.BLOCKCHAIN_RINKEBY_PRIVATE_KEY],
-      contracts: {}
+      contracts: {
+        nft: '0x94EDC644f44D7ad7B85520af6895146d56856Da8',
+        token: '0xbDD19dc5443D44834FF370Deff46B7Ff10a16142',
+        staking: '0xC821c79Ca56F0E8264accE343b6c78F5DbE77D82',
+        store: '0x94895fe0E0A257287F9739E96b839D0B1d11Ab6F'
+      }
     },
     ethereum: {
       url: "https://mainnet.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
@@ -69,7 +74,7 @@ module.exports = {
   gasReporter: {
     currency: 'USD',
     coinmarketcap: process.env.BLOCKCHAIN_CMC_KEY,
-    gasPrice: 50
+    gasPrice: 100
   },
   etherscan: {
     // Your API key for Etherscan

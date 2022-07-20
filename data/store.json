@@ -1,0 +1,8 @@
+{
+  "name": "3Land Store",
+  "description": "Physical vouchers and special digital assets that can be purchased with 3L points",
+  "image": "https://pbs.twimg.com/profile_images/1546564815837188097/3uLCBWyx_400x400.jpg",
+  "external_link": "https://3landersnft.com/",
+  "seller_fee_basis_points": 400,
+  "fee_recipient": ""
+}

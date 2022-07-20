@@ -23,11 +23,10 @@ function getRole(name) {
   ).toString('hex');
 }
 
-const contract_uri = ''
-const base_uri = ''
+const contract_uri = 'https://raw.githubusercontent.com/3Landers/contracts/main/data/store.json'
+const base_uri = 'https://raw.githubusercontent.com/3Landers/contracts/main/data/samples/'
 
 async function main() {
-  await hre.run('compile')
   //get network and admin
   const network = hardhat.config.networks[hardhat.config.defaultNetwork]
   const admin = new ethers.Wallet(network.accounts[0])
@@ -62,7 +61,7 @@ async function main() {
   console.log('-----------------------------------')
   console.log('Next Steps:')
   console.log('In ERC1155Store contract, grant FUNDER_ROLE, MINTER_ROLE, CURATOR_ROLE to admin (choose another wallet)')
-  console.log(` - ${network.scanner}/address/${staking.address}#writeContract`)
+  console.log(` - ${network.scanner}/address/${store.address}#writeContract`)
   console.log(` - grantRole( ${getRole('FUNDER_ROLE')}, ${admin.address} )`)
   console.log(` - grantRole( ${getRole('MINTER_ROLE')}, ${admin.address} )`)
   console.log(` - grantRole( ${getRole('CURATOR_ROLE')}, ${admin.address} )`)
