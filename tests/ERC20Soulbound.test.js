@@ -82,16 +82,16 @@ describe('ERC20Soulbound Tests', function () {
   it('Should burn', async function() {
     const { admin, user1, user2 } = this.signers
     
-    await user1.withToken['burn(uint256)'](1000)
+    await user1.withToken.burn(1000)
     expect(
       await admin.withToken.balanceOf(user1.address)
     ).to.equal(0)
 
     await expect(//permissions
-      user1.withToken['burn(address,uint256)'](user2.address, 2000)
+      user1.withToken.burnFrom(user2.address, 2000)
     ).to.be.revertedWith('InvalidCall()')
 
-    await admin.withToken['burn(address,uint256)'](user2.address, 2000)
+    await admin.withToken.burnFrom(user2.address, 2000)
     expect(
       await admin.withToken.balanceOf(user2.address)
     ).to.equal(0)

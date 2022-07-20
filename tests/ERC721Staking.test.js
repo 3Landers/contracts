@@ -98,12 +98,12 @@ describe('ERC721Staking Tests', function () {
     await user1.withNFT.approve(user1.withStaking.address, 2)
     await user1.withNFT.approve(user1.withStaking.address, 3)
 
-    //not staking so nothing would be released
-    expect(await admin.withStaking.released(1)).to.equal(0)
-    expect(await admin.withStaking.released(2)).to.equal(0)
-    expect(await admin.withStaking.released(3)).to.equal(0)
-    expect(await admin.withStaking.released(4)).to.equal(0)
-    expect(await admin.withStaking.released(5)).to.equal(0)
+    //never staked so nothing was released
+    expect(await admin.withStaking.lastReleased(1)).to.equal(0)
+    expect(await admin.withStaking.lastReleased(2)).to.equal(0)
+    expect(await admin.withStaking.lastReleased(3)).to.equal(0)
+    expect(await admin.withStaking.lastReleased(4)).to.equal(0)
+    expect(await admin.withStaking.lastReleased(5)).to.equal(0)
     //not staking so nothing is releaseable
     expect(await admin.withStaking.releaseable(1)).to.equal(0)
     expect(await admin.withStaking.releaseable(2)).to.equal(0)
@@ -116,11 +116,12 @@ describe('ERC721Staking Tests', function () {
     expect(await admin.withStaking.stakedSince(3)).to.equal(0)
     expect(await admin.withStaking.stakedSince(4)).to.equal(0)
     expect(await admin.withStaking.stakedSince(5)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(1)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(2)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(3)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(4)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(5)).to.equal(0)
+    //never staked so no history
+    expect(await admin.withStaking.highestStakeTime(1)).to.equal(0)
+    expect(await admin.withStaking.highestStakeTime(2)).to.equal(0)
+    expect(await admin.withStaking.highestStakeTime(3)).to.equal(0)
+    expect(await admin.withStaking.highestStakeTime(4)).to.equal(0)
+    expect(await admin.withStaking.highestStakeTime(5)).to.equal(0)
     
     //stake 1
     await user1.withStaking['stake(uint256[])']([1])
@@ -151,11 +152,11 @@ describe('ERC721Staking Tests', function () {
     ).length).to.equal(4)
 
     //should be last date
-    expect(await admin.withStaking.released(1)).to.be.above(0)
-    expect(await admin.withStaking.released(2)).to.be.above(0)
-    expect(await admin.withStaking.released(3)).to.be.above(0)
-    expect(await admin.withStaking.released(4)).to.be.above(0)
-    expect(await admin.withStaking.released(5)).to.to.equal(0)
+    expect(await admin.withStaking.lastReleased(1)).to.be.above(0)
+    expect(await admin.withStaking.lastReleased(2)).to.be.above(0)
+    expect(await admin.withStaking.lastReleased(3)).to.be.above(0)
+    expect(await admin.withStaking.lastReleased(4)).to.be.above(0)
+    expect(await admin.withStaking.lastReleased(5)).to.to.equal(0)
     //should be releaseable now
     expect(await admin.withStaking.releaseable(1)).to.be.above(0)
     expect(await admin.withStaking.releaseable(2)).to.be.above(0)
@@ -169,11 +170,11 @@ describe('ERC721Staking Tests', function () {
     expect(await admin.withStaking.stakedSince(4)).to.be.above(0)
     expect(await admin.withStaking.stakedSince(5)).to.equal(0)
     //did not unstake yet so no history
-    expect(await admin.withStaking.stakedLongest(1)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(2)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(3)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(4)).to.equal(0)
-    expect(await admin.withStaking.stakedLongest(5)).to.equal(0)
+    expect(await admin.withStaking.highestStakeTime(1)).to.be.above(0)
+    expect(await admin.withStaking.highestStakeTime(2)).to.be.above(0)
+    expect(await admin.withStaking.highestStakeTime(3)).to.be.above(0)
+    //expect(await admin.withStaking.highestStakeTime(4)).to.be.above(0)
+    expect(await admin.withStaking.highestStakeTime(5)).to.equal(0)
   })
 
   it('Should not stake NFT', async function() {
@@ -196,19 +197,15 @@ describe('ERC721Staking Tests', function () {
     const { admin, user1 } = this.signers
 
     this.since = await admin.withStaking.stakedSince(1)
-    this.longest = await admin.withStaking.stakedLongest(1)
+    this.longest = await admin.withStaking.highestStakeTime(1)
     this.balance = await admin.withToken.balanceOf(user1.address)
 
     await user1.withStaking['release(uint256[])']([1, 2])
     expect(//user to have tokens now
       await user1.withToken.balanceOf(user1.address)
     ).to.be.above(this.balance)
-    expect(//staking since to not change
-      await admin.withStaking.stakedSince(1)
-    ).to.equal(this.since)
-    expect(//longest should still be 0
-      await admin.withStaking.stakedLongest(1)
-    ).to.equal(0)
+
+    this.balance = await user1.withToken.balanceOf(user1.address)
   })
 
   it('Should fastforward 30 days later', async function() {
@@ -220,6 +217,13 @@ describe('ERC721Staking Tests', function () {
   it('Should unstake', async function() {
     const { admin, user1 } = this.signers
 
+    expect(//staking since to not change
+      await admin.withStaking.stakedSince(1)
+    ).to.equal(this.since)
+    expect(//highest should now be above the longest
+      await admin.withStaking.highestStakeTime(1)
+    ).to.be.above(this.longest)
+
     await user1.withStaking['unstake(uint256[])']([1, 2])
     expect(//user to have more tokens than before
       await user1.withToken.balanceOf(user1.address)
@@ -228,7 +232,7 @@ describe('ERC721Staking Tests', function () {
       await admin.withStaking.stakedSince(1)
     ).to.equal(0)
     expect(//should be something now
-      await admin.withStaking.stakedLongest(1)
+      await admin.withStaking.highestStakeTime(1)
     ).to.be.above(this.longest)
   })
 })

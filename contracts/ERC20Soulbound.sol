@@ -44,13 +44,11 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
     _burn(_msgSender(), amount);
   }
 
-  // ============ Admin Methods ============
-
   /**
    * @dev Destroys `amount` tokens from `account`, deducting from 
    * the caller's allowance.
    */
-  function burn(address account, uint256 amount) external {
+  function burnFrom(address account, uint256 amount) external {
     address operator = _msgSender();
     //if operator is not allowed to burn
     if (!hasRole(_BURNER_ROLE, operator)) {
@@ -66,6 +64,8 @@ contract ERC20Soulbound is Pausable, AccessControl, ERC20 {
     //now actually burn (with no other restrictions)
     _burn(account, amount);
   }
+
+  // ============ Admin Methods ============
 
   /**
    * @dev Creates `amount` new tokens for `to`.

@@ -81,9 +81,9 @@ contract ERC721Staking is
   //mapping of nft token id to starting stake time
   mapping(uint256 => uint256) private _start;
   //mapping of nft token id to last released time
-  mapping(uint256 => uint256) private _released;
+  mapping(uint256 => uint256) private _lastReleased;
   //mapping of nft token id to longest time stake
-  mapping(uint256 => uint256) private _longest;
+  mapping(uint256 => uint256) private _highestStakeTime;
   //tokens earned per second
   uint256 private _tokenRate = 0.0001 ether;
 
@@ -154,8 +154,8 @@ contract ERC721Staking is
   /**
    * @dev Returns the last time tokens were released on `tokenId`
    */
-  function released(uint256 tokenId) external view returns(uint256) {
-    return _start[tokenId];
+  function lastReleased(uint256 tokenId) external view returns(uint256) {
+    return _lastReleased[tokenId];
   }
 
   /**
@@ -163,7 +163,7 @@ contract ERC721Staking is
    */
   function releaseable(uint256 tokenId) external view returns(uint256) {
     //if not staking
-    if (_released[tokenId] == 0) {
+    if (_lastReleased[tokenId] == 0) {
       return 0;
     }
     //duration x rate
@@ -199,8 +199,11 @@ contract ERC721Staking is
   /**
    * @dev Returns the date which the token started staking. 
    */
-  function stakedLongest(uint256 tokenId) external view returns(uint256) {
-    return _longest[tokenId];
+  function highestStakeTime(uint256 tokenId) external view returns(uint256) {
+    uint256 duration = _duration(tokenId, block.timestamp);
+    return duration > _highestStakeTime[tokenId] 
+      ? duration
+      : _highestStakeTime[tokenId];
   }
 
   // ============ Write Methods ============
@@ -274,7 +277,10 @@ contract ERC721Staking is
     uint256 tokenId, 
     uint256 timestamp
   ) internal view returns(uint256) {
-    return timestamp - _released[tokenId];
+    if (_lastReleased[tokenId] == 0) {
+      return 0;
+    }
+    return timestamp - _lastReleased[tokenId];
   }
 
   /**
@@ -287,12 +293,12 @@ contract ERC721Staking is
       //get tokenId
       uint256 tokenId = tokenIds[i];
       //revert if not staking or not owner
-      if (_released[tokenId] == 0 || staker != ownerOf(tokenId)) 
+      if (_lastReleased[tokenId] == 0 || staker != ownerOf(tokenId)) 
         revert InvalidCall();
       //add to release
       toRelease += _releaseable(_duration(tokenId, block.timestamp));
       //update the last released time
-      _released[tokenId] = block.timestamp;
+      _lastReleased[tokenId] = block.timestamp;
     }
     //mint tokens
     address(TOKEN).functionCall(
@@ -326,7 +332,7 @@ contract ERC721Staking is
       //revert if already staking
       //we dont need to check `ownerOf` because 
       //`transferFrom` will fail if not owner
-      if (_released[tokenId] != 0) revert InvalidCall();
+      if (_lastReleased[tokenId] != 0) revert InvalidCall();
       // reverts if contract not approved to move nft tokens
       NFT.transferFrom(staker, address(this), tokenId);
       //map token to staker
@@ -334,7 +340,7 @@ contract ERC721Staking is
       //set start time
       _start[tokenId] = block.timestamp;
       //set the last released time
-      _released[tokenId] = block.timestamp;
+      _lastReleased[tokenId] = block.timestamp;
       //mock emit mint transfer
       emit Transfer(address(0), staker, tokenId);
     }
@@ -353,7 +359,7 @@ contract ERC721Staking is
       //get token id
       uint256 tokenId = tokenIds[i];
       //revert if not staking or not owner
-      if (_released[tokenId] == 0 || staker != ownerOf(tokenId)) 
+      if (_lastReleased[tokenId] == 0 || staker != ownerOf(tokenId)) 
         revert InvalidCall();
 
       //transfer nft to owner
@@ -365,10 +371,10 @@ contract ERC721Staking is
       uint256 duration = _duration(tokenId, block.timestamp);
       //reset the clocks
       _start[tokenId] = 0;
-      _released[tokenId] = 0;
+      _lastReleased[tokenId] = 0;
       //update total
-      if (duration > _longest[tokenId]) {
-        _longest[tokenId] = duration;
+      if (duration > _highestStakeTime[tokenId]) {
+        _highestStakeTime[tokenId] = duration;
       }
 
       //mock emit burn transfer
