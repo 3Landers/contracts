@@ -40,7 +40,7 @@ module.exports = {
       contracts: {
         nft: '0x94EDC644f44D7ad7B85520af6895146d56856Da8',
         token: '0xbDD19dc5443D44834FF370Deff46B7Ff10a16142',
-        staking: '0xC821c79Ca56F0E8264accE343b6c78F5DbE77D82',
+        staking: '0xfc4afc5F7F2C62a181B054Fb6ead9AA53788D4F8',
         store: '0x94895fe0E0A257287F9739E96b839D0B1d11Ab6F'
       }
     },

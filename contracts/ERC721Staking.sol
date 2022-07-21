@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -17,16 +18,26 @@ interface IERC20Mintable is IERC20 {
   function mint(address to, uint256 amount) external;
 }
 
-interface IERC721ReadOnly {
+interface IERC721TokenURI is IERC721Enumerable {
+  function tokenURI(uint256 tokenId) external view returns(string memory);
+}
+
+interface IERC721ReadOnly is IERC165 {
   event Transfer(
     address indexed from, 
     address indexed to, 
     uint256 indexed tokenId
   );
 
+  function name() external view returns(string memory);
+
+  function symbol() external view returns(string memory);
+
   function balanceOf(address owner) external view returns (uint256 balance);
 
   function ownerOf(uint256 tokenId) external view returns (address owner);
+
+  function tokenURI(uint256 tokenId) external view returns(string memory);
 }
 
 // ============ Contract ============
@@ -68,7 +79,7 @@ contract ERC721Staking is
   bytes32 private constant _CURATOR_ROLE = keccak256("CURATOR_ROLE");
   
   //this is the contract address for erc721
-  IERC721Enumerable public immutable NFT;
+  IERC721TokenURI public immutable NFT;
   //this is the contract address for erc20
   IERC20Mintable public immutable TOKEN;
 
@@ -90,7 +101,7 @@ contract ERC721Staking is
   // ============ Deploy ============
 
   constructor(
-    IERC721Enumerable nft, 
+    IERC721TokenURI nft, 
     IERC20Mintable token, 
     address admin
   ) {
@@ -122,33 +133,13 @@ contract ERC721Staking is
   }
 
   /**
-   * @dev Returns the number of tokens in ``owner``'s account.
+   * @dev Returns the date which the token started staking. 
    */
-  function balanceOf(
-    address owner
-  ) public view returns(uint256 balance) {
-    return _balances[owner];
-  }
-
-  /**
-   * @dev allows the contract to receive NFTs
-   */
-  function onERC721Received(
-    address, 
-    address, 
-    uint256, 
-    bytes calldata
-  ) external pure returns(bytes4) {
-    return 0x150b7a02;
-  }
-
-  /**
-   * @dev Returns the owner of the `tokenId` token.
-   */
-  function ownerOf(
-    uint256 tokenId
-  ) public view returns(address owner) {
-    return _owner[tokenId];
+  function highestStakeTime(uint256 tokenId) external view returns(uint256) {
+    uint256 duration = _duration(tokenId, block.timestamp);
+    return duration > _highestStakeTime[tokenId] 
+      ? duration
+      : _highestStakeTime[tokenId];
   }
 
   /**
@@ -194,16 +185,6 @@ contract ERC721Staking is
    */
   function stakedSince(uint256 tokenId) external view returns(uint256) {
     return _start[tokenId];
-  }
-
-  /**
-   * @dev Returns the date which the token started staking. 
-   */
-  function highestStakeTime(uint256 tokenId) external view returns(uint256) {
-    uint256 duration = _duration(tokenId, block.timestamp);
-    return duration > _highestStakeTime[tokenId] 
-      ? duration
-      : _highestStakeTime[tokenId];
   }
 
   // ============ Write Methods ============
@@ -266,6 +247,84 @@ contract ERC721Staking is
    */
   function updateRate(uint256 rate) external onlyRole(_CURATOR_ROLE) {
     _tokenRate = rate;
+  }
+
+  // ============ ERC721 Related ============
+
+  /**
+   * @dev Returns the number of tokens in ``owner``'s account.
+   */
+  function balanceOf(
+    address owner
+  ) public view returns(uint256 balance) {
+    return _balances[owner];
+  }
+
+  /**
+   * @dev Never approved
+   */
+  function getApproved(uint256) public pure returns(address) {
+    return address(0);
+  }
+
+  /**
+   * @dev Never approved
+   */
+  function isApprovedForAll(address, address) public pure returns(bool) {
+    return false;
+  }
+
+  /**
+   * @dev Returns the name of this staked nft collection
+   */
+  function name() external pure returns(string memory) {
+    return "3Landers Staked";
+  }
+
+  /**
+   * @dev allows the contract to receive NFTs
+   */
+  function onERC721Received(
+    address, 
+    address, 
+    uint256, 
+    bytes calldata
+  ) external pure returns(bytes4) {
+    return 0x150b7a02;
+  }
+
+  /**
+   * @dev Returns the owner of the `tokenId` token.
+   */
+  function ownerOf(
+    uint256 tokenId
+  ) public view returns(address owner) {
+    return _owner[tokenId];
+  }
+
+  /**
+   * @dev See {IERC165-supportsInterface}.
+   */
+  function supportsInterface(
+    bytes4 interfaceId
+  ) public view override(IERC165, AccessControl) returns(bool) {
+    return interfaceId == 0x80ac58cd 
+      || interfaceId == type(IERC721Metadata).interfaceId 
+      || super.supportsInterface(interfaceId);
+  }
+
+  /**
+   * @dev Returns the name of this staked nft collection
+   */
+  function symbol() external pure returns(string memory) {
+    return "3LS";
+  }
+
+  /**
+   * @dev Returns the token URI of the original token
+   */
+  function tokenURI(uint256 tokenId) external view returns(string memory) {
+    return NFT.tokenURI(tokenId);
   }
 
   // ============ Internal Methods ============
